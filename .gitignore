@@ -1,0 +1,32 @@
+# Secrets — never commit. The NVIDIA key lives in .env only.
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Runtime data — workspaces, artifacts, SQLite database
+data/
+!data/.gitkeep
+
+# Logs & OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
