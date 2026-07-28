@@ -1,0 +1,881 @@
+<title>Phosphor — a signal trace game</title>
+
+<style>
+  :root {
+    --void: #0a1416;
+    --scope: #0f2226;
+    --grid: #1c3a3f;
+    --grid-major: #27515a;
+    --phosphor: #ffb340;
+    --phosphor-hot: #ffe2a8;
+    --contact: #4fd6c8;
+    --alert: #ff6b5a;
+    --ink: #cfe3e4;
+    --ink-dim: #6f8b8e;
+    --bezel: #141d1f;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+      "Liberation Mono", monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: clamp(0.75rem, 3vw, 2rem);
+    background:
+      radial-gradient(120% 90% at 50% 0%, #12262a 0%, var(--void) 62%);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .unit {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    width: 100%;
+    max-width: 33rem;
+  }
+
+  /* ---------------------------------------------------------- readouts */
+
+  .rail {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--grid);
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .readout {
+    background: var(--bezel);
+    padding: 0.5rem 0.7rem 0.55rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .readout .label {
+    font-size: 0.575rem;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .readout .value {
+    font-size: 1.4rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--phosphor);
+    text-shadow: 0 0 14px rgba(255, 179, 64, 0.34);
+  }
+
+  .readout .value.cool { color: var(--contact); text-shadow: 0 0 14px rgba(79, 214, 200, 0.3); }
+  .readout .value.idle { color: var(--ink-dim); text-shadow: none; }
+
+  /* ------------------------------------------------------------- scope */
+
+  .bezel {
+    position: relative;
+    padding: 0.7rem;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #1a2528 0%, #0d1618 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.5),
+      0 18px 40px -18px rgba(0, 0, 0, 0.9);
+  }
+
+  .face {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--scope);
+    box-shadow:
+      inset 0 0 0 1px #08191c,
+      inset 0 0 60px rgba(0, 0, 0, 0.55);
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  .face canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Scanlines and vignette sit above the trace, below the overlay. */
+  .face::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.16) 0 1px,
+        transparent 1px 3px
+      ),
+      radial-gradient(115% 115% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+  }
+
+  /* ----------------------------------------------------------- overlay */
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+    background: rgba(8, 20, 22, 0.82);
+    backdrop-filter: blur(2px);
+  }
+
+  .overlay[hidden] { display: none; }
+
+  .overlay h1 {
+    margin: 0;
+    font-size: clamp(1.5rem, 6vw, 2.1rem);
+    font-weight: 700;
+    letter-spacing: 0.26em;
+    text-indent: 0.26em;
+    text-transform: uppercase;
+    color: var(--phosphor);
+    text-shadow: 0 0 26px rgba(255, 179, 64, 0.42);
+    text-wrap: balance;
+  }
+
+  .overlay h2 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+    text-transform: uppercase;
+    color: var(--alert);
+    text-wrap: balance;
+  }
+
+  .overlay p {
+    margin: 0;
+    max-width: 26rem;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: var(--ink-dim);
+    text-wrap: balance;
+  }
+
+  .overlay .final {
+    font-size: 0.8rem;
+    color: var(--ink);
+    letter-spacing: 0.05em;
+  }
+  .overlay .final b {
+    color: var(--phosphor);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cta {
+    margin-top: 0.4rem;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+    text-transform: uppercase;
+    color: var(--void);
+    background: var(--phosphor);
+    border: none;
+    border-radius: 3px;
+    padding: 0.65rem 1.5rem;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+  }
+  .cta:hover { background: var(--phosphor-hot); }
+  .cta:active { transform: translateY(1px); }
+  .cta:focus-visible {
+    outline: 2px solid var(--contact);
+    outline-offset: 3px;
+  }
+
+  /* -------------------------------------------------------------- feet */
+
+  .feet {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    font-size: 0.63rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+
+  .keys { display: flex; flex-wrap: wrap; gap: 0.35rem 0.55rem; align-items: center; }
+
+  kbd {
+    font: inherit;
+    font-size: 0.63rem;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    background: var(--bezel);
+    border: 1px solid var(--grid);
+    border-bottom-width: 2px;
+    border-radius: 3px;
+    padding: 0.15rem 0.4rem;
+  }
+
+  .toggle {
+    font: inherit;
+    font-size: 0.63rem;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    background: transparent;
+    border: 1px solid var(--grid);
+    border-radius: 3px;
+    padding: 0.3rem 0.6rem;
+    cursor: pointer;
+  }
+  .toggle:hover { color: var(--ink); border-color: var(--grid-major); }
+  .toggle[aria-pressed="true"] { color: var(--phosphor); border-color: #4a3a1c; }
+  .toggle:focus-visible { outline: 2px solid var(--contact); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<main class="unit">
+  <div class="rail">
+    <div class="readout">
+      <span class="label">Trace</span>
+      <span class="value" id="score">0</span>
+    </div>
+    <div class="readout">
+      <span class="label">Best</span>
+      <span class="value cool" id="best">0</span>
+    </div>
+    <div class="readout">
+      <span class="label">Gain</span>
+      <span class="value idle" id="combo">&times;1</span>
+    </div>
+  </div>
+
+  <div class="bezel">
+    <div class="face" id="face">
+      <canvas id="grid" aria-hidden="true"></canvas>
+      <canvas id="play" aria-label="Play area"></canvas>
+
+      <div class="overlay" id="overlay">
+        <h1 id="title">Phosphor</h1>
+        <h2 id="subtitle" hidden>Signal lost</h2>
+        <p id="blurb">
+          Steer the trace. Collect contacts. Every contact lengthens the trace
+          and quickens the sweep — collide with the wall or your own tail and
+          the signal is lost.
+        </p>
+        <p class="final" id="final" hidden></p>
+        <button class="cta" id="cta" type="button">Begin sweep</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="feet">
+    <div class="keys">
+      <kbd>&larr;</kbd><kbd>&darr;</kbd><kbd>&uarr;</kbd><kbd>&rarr;</kbd>
+      <span>or</span>
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+      <span>steer</span>
+      <kbd>Space</kbd><span>pause</span>
+      <kbd>R</kbd><span>restart</span>
+    </div>
+    <button class="toggle" id="sound" type="button" aria-pressed="false">Sound off</button>
+  </div>
+</main>
+
+<script>
+  (() => {
+    "use strict";
+
+    // ---------------------------------------------------------- constants
+    const COLS = 21;
+    const ROWS = 21;
+    const BASE_STEP = 148;      // ms per cell at the start
+    const MIN_STEP = 62;        // fastest the sweep ever gets
+    const SPEEDUP = 3.1;        // ms shaved per contact
+    const COMBO_WINDOW = 2600;  // ms to chain a contact for extra gain
+    const RARE_EVERY = 5;       // every Nth contact is a decaying bonus
+    const RARE_LIFE = 6200;     // ms before a bonus contact fades out
+
+    const COLOR = {
+      void: "#0a1416",
+      grid: "#1c3a3f",
+      gridMajor: "#27515a",
+      phosphor: "#ffb340",
+      hot: "#ffe2a8",
+      contact: "#4fd6c8",
+      alert: "#ff6b5a",
+    };
+
+    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // ------------------------------------------------------------ elements
+    const face = document.getElementById("face");
+    const gridCanvas = document.getElementById("grid");
+    const playCanvas = document.getElementById("play");
+    const gridCtx = gridCanvas.getContext("2d");
+    const ctx = playCanvas.getContext("2d");
+
+    const ui = {
+      score: document.getElementById("score"),
+      best: document.getElementById("best"),
+      combo: document.getElementById("combo"),
+      overlay: document.getElementById("overlay"),
+      title: document.getElementById("title"),
+      subtitle: document.getElementById("subtitle"),
+      blurb: document.getElementById("blurb"),
+      final: document.getElementById("final"),
+      cta: document.getElementById("cta"),
+      sound: document.getElementById("sound"),
+    };
+
+    // ------------------------------------------------------------- storage
+    // Storage can be unavailable in a sandboxed frame; fall back to memory
+    // rather than letting the game fail to start.
+    const store = (() => {
+      let memory = 0;
+      try {
+        const probe = "__phosphor__";
+        localStorage.setItem(probe, "1");
+        localStorage.removeItem(probe);
+        return {
+          get: () => Number(localStorage.getItem("phosphor.best") || 0),
+          set: (v) => localStorage.setItem("phosphor.best", String(v)),
+        };
+      } catch {
+        return { get: () => memory, set: (v) => { memory = v; } };
+      }
+    })();
+
+    // --------------------------------------------------------------- audio
+    const audio = (() => {
+      let context = null;
+      let enabled = false;
+
+      const ensure = () => {
+        if (!context) {
+          const Ctor = window.AudioContext || window.webkitAudioContext;
+          if (!Ctor) return null;
+          context = new Ctor();
+        }
+        if (context.state === "suspended") context.resume();
+        return context;
+      };
+
+      const tone = (freq, duration, type, gainPeak) => {
+        if (!enabled) return;
+        const ac = ensure();
+        if (!ac) return;
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ac.currentTime);
+        gain.gain.setValueAtTime(0, ac.currentTime);
+        gain.gain.linearRampToValueAtTime(gainPeak, ac.currentTime + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + duration);
+        osc.connect(gain).connect(ac.destination);
+        osc.start();
+        osc.stop(ac.currentTime + duration + 0.02);
+      };
+
+      return {
+        get enabled() { return enabled; },
+        toggle() {
+          enabled = !enabled;
+          if (enabled) ensure();
+          return enabled;
+        },
+        contact(step) {
+          tone(520 + Math.min(step, 8) * 55, 0.09, "square", 0.05);
+        },
+        bonus() {
+          tone(760, 0.14, "triangle", 0.07);
+          setTimeout(() => tone(1140, 0.12, "triangle", 0.055), 70);
+        },
+        lost() {
+          tone(150, 0.34, "sawtooth", 0.07);
+          setTimeout(() => tone(96, 0.44, "sawtooth", 0.06), 90);
+        },
+      };
+    })();
+
+    // ---------------------------------------------------------------- state
+    const STATE = { READY: "ready", RUNNING: "running", PAUSED: "paused", OVER: "over" };
+
+    let state = STATE.READY;
+    let snake, direction, queued, contact, particles;
+    let score, best, stepMs, accumulator, lastFrame, comboCount, lastContactAt, shake;
+    let cell = 20;
+
+    best = store.get();
+    ui.best.textContent = String(best);
+
+    function reset() {
+      const midY = Math.floor(ROWS / 2);
+      snake = [
+        { x: 6, y: midY, px: 6, py: midY },
+        { x: 5, y: midY, px: 5, py: midY },
+        { x: 4, y: midY, px: 4, py: midY },
+      ];
+      direction = { x: 1, y: 0 };
+      queued = [];
+      particles = [];
+      score = 0;
+      stepMs = BASE_STEP;
+      accumulator = 0;
+      comboCount = 0;
+      lastContactAt = -Infinity;
+      shake = 0;
+      contact = spawnContact(false);
+      paint();
+      clearTrace();
+    }
+
+    function spawnContact(rare) {
+      const taken = new Set(snake.map((s) => s.x + "," + s.y));
+      const open = [];
+      for (let y = 0; y < ROWS; y += 1) {
+        for (let x = 0; x < COLS; x += 1) {
+          if (!taken.has(x + "," + y)) open.push({ x, y });
+        }
+      }
+      if (open.length === 0) return null;
+      const spot = open[(Math.random() * open.length) | 0];
+      return { x: spot.x, y: spot.y, rare, born: performance.now() };
+    }
+
+    // ---------------------------------------------------------------- sizing
+    function resize() {
+      const rect = face.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const size = Math.max(1, Math.floor(rect.width));
+
+      for (const canvas of [gridCanvas, playCanvas]) {
+        canvas.width = Math.floor(size * dpr);
+        canvas.height = Math.floor(size * dpr);
+      }
+      gridCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      cell = size / COLS;
+      drawGrid(size);
+      clearTrace();
+    }
+
+    function clearTrace() {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, playCanvas.width, playCanvas.height);
+      ctx.restore();
+    }
+
+    /** The graticule is static, so it is drawn once per resize. */
+    function drawGrid(size) {
+      gridCtx.clearRect(0, 0, size, size);
+      gridCtx.lineWidth = 1;
+
+      for (let i = 0; i <= COLS; i += 1) {
+        const p = Math.round(i * cell) + 0.5;
+        const major = i % 5 === 0;
+        gridCtx.strokeStyle = major ? COLOR.gridMajor : COLOR.grid;
+        gridCtx.globalAlpha = major ? 0.75 : 0.4;
+        gridCtx.beginPath();
+        gridCtx.moveTo(p, 0);
+        gridCtx.lineTo(p, size);
+        gridCtx.moveTo(0, p);
+        gridCtx.lineTo(size, p);
+        gridCtx.stroke();
+      }
+
+      // Crosshair through the centre, the way a scope face is marked.
+      gridCtx.globalAlpha = 0.9;
+      gridCtx.strokeStyle = COLOR.gridMajor;
+      const mid = Math.round((COLS / 2) * cell) + 0.5;
+      gridCtx.beginPath();
+      gridCtx.moveTo(mid, 0); gridCtx.lineTo(mid, size);
+      gridCtx.moveTo(0, mid); gridCtx.lineTo(size, mid);
+      gridCtx.stroke();
+      gridCtx.globalAlpha = 1;
+    }
+
+    // ---------------------------------------------------------------- input
+    const DIRS = {
+      ArrowUp: { x: 0, y: -1 }, KeyW: { x: 0, y: -1 },
+      ArrowDown: { x: 0, y: 1 }, KeyS: { x: 0, y: 1 },
+      ArrowLeft: { x: -1, y: 0 }, KeyA: { x: -1, y: 0 },
+      ArrowRight: { x: 1, y: 0 }, KeyD: { x: 1, y: 0 },
+    };
+
+    function steer(dir) {
+      // Compare against the last queued turn, so two fast inputs in one tick
+      // both register instead of the second being judged against a stale
+      // direction and dropped.
+      const reference = queued.length ? queued[queued.length - 1] : direction;
+      if (dir.x === -reference.x && dir.y === -reference.y) return;
+      if (dir.x === reference.x && dir.y === reference.y) return;
+      if (queued.length < 3) queued.push(dir);
+    }
+
+    addEventListener("keydown", (event) => {
+      if (DIRS[event.code]) {
+        event.preventDefault();
+        if (state === STATE.READY) start();
+        if (state === STATE.RUNNING) steer(DIRS[event.code]);
+        return;
+      }
+      if (event.code === "Space") {
+        event.preventDefault();
+        if (state === STATE.READY || state === STATE.OVER) start();
+        else togglePause();
+        return;
+      }
+      if (event.code === "KeyR") {
+        event.preventDefault();
+        start();
+      }
+    });
+
+    // The button says "Resume" while paused, so it must resume — not restart
+    // and silently throw the run away.
+    ui.cta.addEventListener("click", () => {
+      if (state === STATE.PAUSED) togglePause();
+      else start();
+    });
+
+    ui.sound.addEventListener("click", () => {
+      const on = audio.toggle();
+      ui.sound.setAttribute("aria-pressed", String(on));
+      ui.sound.textContent = on ? "Sound on" : "Sound off";
+    });
+
+    // Touch: swipe to steer, tap to start or unpause.
+    let touchStart = null;
+    /** The overlay owns its own button; a tap there must not also count as a
+     *  tap on the play field, or one press would fire two actions. */
+    const fromOverlay = (event) =>
+      event.target instanceof Element && event.target.closest(".overlay");
+
+    face.addEventListener("pointerdown", (event) => {
+      if (fromOverlay(event)) return;
+      touchStart = { x: event.clientX, y: event.clientY, moved: false };
+    });
+    face.addEventListener("pointermove", (event) => {
+      if (!touchStart || state !== STATE.RUNNING) return;
+      const dx = event.clientX - touchStart.x;
+      const dy = event.clientY - touchStart.y;
+      if (Math.hypot(dx, dy) < 24) return;
+      steer(
+        Math.abs(dx) > Math.abs(dy)
+          ? { x: Math.sign(dx), y: 0 }
+          : { x: 0, y: Math.sign(dy) },
+      );
+      touchStart = { x: event.clientX, y: event.clientY, moved: true };
+    });
+    face.addEventListener("pointerup", (event) => {
+      if (fromOverlay(event)) return;
+      if (touchStart && !touchStart.moved) {
+        if (state === STATE.READY || state === STATE.OVER) start();
+        else togglePause();
+      }
+      touchStart = null;
+    });
+
+    // -------------------------------------------------------------- control
+    function start() {
+      reset();
+      state = STATE.RUNNING;
+      lastFrame = performance.now();
+      ui.overlay.hidden = true;
+      paint();
+    }
+
+    function togglePause() {
+      if (state === STATE.RUNNING) {
+        state = STATE.PAUSED;
+        showOverlay({
+          title: "Paused",
+          blurb: "The trace is held. Resume when you're ready.",
+          cta: "Resume",
+        });
+      } else if (state === STATE.PAUSED) {
+        state = STATE.RUNNING;
+        lastFrame = performance.now();
+        ui.overlay.hidden = true;
+      }
+    }
+
+    function showOverlay({ title, subtitle, blurb, final, cta }) {
+      ui.title.textContent = title;
+      ui.title.hidden = !title;
+      ui.subtitle.hidden = !subtitle;
+      if (subtitle) ui.subtitle.textContent = subtitle;
+      ui.blurb.textContent = blurb;
+      ui.final.hidden = !final;
+      if (final) ui.final.innerHTML = final;
+      ui.cta.textContent = cta;
+      ui.overlay.hidden = false;
+    }
+
+    function gameOver() {
+      state = STATE.OVER;
+      audio.lost();
+      if (!reduceMotion) shake = 15;
+
+      const record = score > best;
+      if (record) {
+        best = score;
+        store.set(best);
+        ui.best.textContent = String(best);
+      }
+
+      showOverlay({
+        title: "",
+        subtitle: "Signal lost",
+        blurb: record
+          ? "A new longest trace. The scope remembers it."
+          : "The trace ran into something solid. Sweep again.",
+        final: `Trace <b>${score}</b> &nbsp;·&nbsp; Best <b>${best}</b>`,
+        cta: "Sweep again",
+      });
+    }
+
+    // ----------------------------------------------------------------- step
+    function step(now) {
+      if (queued.length) direction = queued.shift();
+
+      const head = snake[0];
+      const next = { x: head.x + direction.x, y: head.y + direction.y };
+
+      if (next.x < 0 || next.y < 0 || next.x >= COLS || next.y >= ROWS) {
+        gameOver();
+        return;
+      }
+      // The tail cell is vacated on this same step, so following it is legal.
+      for (let i = 0; i < snake.length - 1; i += 1) {
+        if (snake[i].x === next.x && snake[i].y === next.y) {
+          gameOver();
+          return;
+        }
+      }
+
+      for (const segment of snake) {
+        segment.px = segment.x;
+        segment.py = segment.y;
+      }
+
+      snake.unshift({ x: next.x, y: next.y, px: head.x, py: head.y });
+
+      const ate = contact && next.x === contact.x && next.y === contact.y;
+      if (ate) {
+        const chained = now - lastContactAt < COMBO_WINDOW;
+        comboCount = chained ? Math.min(comboCount + 1, 5) : 1;
+        lastContactAt = now;
+
+        const multiplier = comboCount;
+        score += (contact.rare ? 5 : 1) * multiplier;
+        stepMs = Math.max(MIN_STEP, stepMs - SPEEDUP);
+
+        burst(contact.x, contact.y, contact.rare ? COLOR.hot : COLOR.contact);
+        if (contact.rare) audio.bonus();
+        else audio.contact(snake.length - 3);
+
+        const nextIsRare = (score > 0) && ((snake.length - 2) % RARE_EVERY === 0);
+        contact = spawnContact(nextIsRare);
+        if (!contact) { gameOver(); return; }
+        paint();
+      } else {
+        snake.pop();
+      }
+
+      // A bonus contact decays; when it expires a plain one replaces it.
+      if (contact && contact.rare && now - contact.born > RARE_LIFE) {
+        contact = spawnContact(false);
+      }
+
+      if (comboCount > 0 && now - lastContactAt > COMBO_WINDOW) {
+        comboCount = 0;
+        paint();
+      }
+    }
+
+    function burst(cx, cy, color) {
+      if (reduceMotion) return;
+      const count = 14;
+      for (let i = 0; i < count; i += 1) {
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+        const speed = 0.05 + Math.random() * 0.11;
+        particles.push({
+          x: cx + 0.5,
+          y: cy + 0.5,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 1,
+          color,
+        });
+      }
+    }
+
+    function paint() {
+      ui.score.textContent = String(score);
+      const active = comboCount > 1;
+      ui.combo.textContent = "×" + Math.max(comboCount, 1);
+      ui.combo.className = "value" + (active ? "" : " idle");
+    }
+
+    // ---------------------------------------------------------------- render
+    function render(alpha) {
+      const w = playCanvas.clientWidth;
+
+      // Phosphor persistence: erase a little alpha each frame so the trail
+      // decays instead of disappearing, leaving the graticule beneath visible.
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.fillStyle = "rgba(0,0,0," + (reduceMotion ? 1 : 0.17) + ")";
+      ctx.fillRect(0, 0, w, w);
+      ctx.globalCompositeOperation = "source-over";
+
+      ctx.save();
+      if (shake > 0) {
+        const magnitude = shake * 0.35;
+        ctx.translate(
+          (Math.random() - 0.5) * magnitude,
+          (Math.random() - 0.5) * magnitude,
+        );
+        shake = Math.max(0, shake - 0.85);
+      }
+
+      // Contact
+      if (contact) {
+        const t = performance.now() / 1000;
+        const pulse = 0.5 + 0.5 * Math.sin(t * (contact.rare ? 9 : 4));
+        const fade = contact.rare
+          ? Math.max(0.25, 1 - (performance.now() - contact.born) / RARE_LIFE)
+          : 1;
+        const cx = (contact.x + 0.5) * cell;
+        const cy = (contact.y + 0.5) * cell;
+        const radius = cell * (contact.rare ? 0.34 : 0.27) * (0.85 + pulse * 0.3);
+
+        ctx.globalAlpha = fade;
+        ctx.shadowBlur = cell * (contact.rare ? 1.5 : 0.9);
+        ctx.shadowColor = contact.rare ? COLOR.hot : COLOR.contact;
+        ctx.fillStyle = contact.rare ? COLOR.hot : COLOR.contact;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (contact.rare) {
+          ctx.globalAlpha = fade * 0.55;
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = COLOR.hot;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius + cell * 0.28 * (1 + pulse * 0.4), 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+      }
+
+      // Trace — interpolated so movement is smooth between grid steps.
+      const lerp = state === STATE.RUNNING ? alpha : 1;
+      for (let i = snake.length - 1; i >= 0; i -= 1) {
+        const s = snake[i];
+        const x = (s.px + (s.x - s.px) * lerp + 0.5) * cell;
+        const y = (s.py + (s.y - s.py) * lerp + 0.5) * cell;
+        const head = i === 0;
+        const taper = 0.30 - (i / snake.length) * 0.11;
+
+        ctx.fillStyle = head ? COLOR.hot : COLOR.phosphor;
+        ctx.shadowColor = COLOR.phosphor;
+        ctx.shadowBlur = head ? cell * 1.4 : cell * 0.5;
+        ctx.globalAlpha = head ? 1 : 0.92 - (i / snake.length) * 0.25;
+
+        const r = cell * taper;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // The beam spot: a hard, unblurred core inside the halo. Without it the
+        // head dissolves into its own glow and you lose track of where you are.
+        if (head) {
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = "#fffdf6";
+          ctx.beginPath();
+          ctx.arc(x, y, r * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+
+      // Particles
+      for (let i = particles.length - 1; i >= 0; i -= 1) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.035;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x * cell, p.y * cell, cell * 0.09 * p.life, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // ------------------------------------------------------------- main loop
+    function frame(now) {
+      const delta = Math.min(now - (lastFrame ?? now), 120);
+      lastFrame = now;
+
+      if (state === STATE.RUNNING) {
+        accumulator += delta;
+        let guard = 0;
+        while (accumulator >= stepMs && state === STATE.RUNNING && guard < 4) {
+          accumulator -= stepMs;
+          guard += 1;
+          step(now);
+        }
+      }
+
+      render(state === STATE.RUNNING ? Math.min(accumulator / stepMs, 1) : 1);
+      requestAnimationFrame(frame);
+    }
+
+    // ------------------------------------------------------------------ boot
+    const observer = new ResizeObserver(() => resize());
+    observer.observe(face);
+
+    reset();
+    resize();
+    paint();
+    requestAnimationFrame(frame);
+  })();
+</script>
