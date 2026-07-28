@@ -17,10 +17,17 @@ checks are still failing — not a broken artifact.
 ## Quick start
 
 ```bash
-cp .env.example .env       # then put your key in it
-pnpm install
+git clone https://github.com/pompomroma/Wadle.git
+cd Wadle
+cp .env.example .env       # then put your model key in it
+pnpm setup                 # installs, then checks your machine is ready
 pnpm dev                   # UI on :5173, API on :5174
 ```
+
+`pnpm setup` runs a preflight that checks Node and pnpm versions, dependencies,
+your `.env`, and whether the port is free — and tells you the exact command to
+fix anything it finds, rather than failing later with a stack trace. Run it on
+its own any time with `pnpm preflight`.
 
 `pnpm dev` builds the UI on the fly. To run it as a single server instead,
 build first — `dist/` is not in the repository, so a fresh clone has no UI
@@ -119,15 +126,26 @@ Only `/api/health` and the UI shell are ungated.
 
 ### Getting a public link
 
+First install `cloudflared` — without it there is no tunnel and no public URL:
+
 ```bash
-pnpm build                              # a fresh clone has no built UI yet
+brew install cloudflared                     # macOS
+# Linux/Windows: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+```
+
+Then:
+
+```bash
 WADLE_TUNNEL=cloudflare pnpm start
 ```
 
-`pnpm start` runs the build for you, so the first line is only needed if you
-want to see build output separately. This publishes a temporary `https://…trycloudflare.com` URL via a Cloudflare
-quick tunnel — no Cloudflare account needed, but `cloudflared` must be on PATH.
-Enabling it forces the token gate on.
+`pnpm start` runs the preflight and builds the UI for you. This publishes a
+temporary `https://….trycloudflare.com` URL via a Cloudflare quick tunnel — no
+Cloudflare account needed. Enabling it forces the token gate on, and the full
+link including the token is printed at startup.
+
+If `cloudflared` is missing, Wadle says so and keeps serving locally instead of
+failing.
 
 Quick tunnels are ephemeral: **the hostname changes every restart.** That's
 right for sharing a session and wrong for anything permanent. For a stable
@@ -140,6 +158,20 @@ docker compose up -d --build     # then point your domain at :5174
 
 Set `WADLE_AUTH_TOKEN` to a value you choose when you do that, so the link
 survives restarts.
+
+### Running without the gate
+
+If you want a reachable instance with no token at all:
+
+```bash
+WADLE_ALLOW_OPEN=1 WADLE_TUNNEL=cloudflare pnpm start
+```
+
+Be clear about what this does: **anyone who reaches that URL can run code on
+your machine.** Wadle builds and executes programs, so an ungated public
+instance is an open remote-code-execution endpoint. It is never the default, the
+startup banner says so in red, and setting `WADLE_AUTH_TOKEN` overrides it. It
+exists because it is your machine and your call — not because it is a good idea.
 
 ---
 

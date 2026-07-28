@@ -26,6 +26,8 @@ export interface AuthState {
   token: string;
   /** Why the gate is on or off, shown at startup. */
   reason: string;
+  /** True when the gate was deliberately switched off on a reachable instance. */
+  overridden?: boolean;
 }
 
 export function isLoopbackHost(host: string): boolean {
@@ -65,6 +67,7 @@ export function resolveAuth(options: {
   tunnelEnabled: boolean;
   host?: string;
   configuredToken?: string;
+  allowOpen?: boolean;
 }): AuthState {
   const host = options.host ?? env.host;
   const configured = (
@@ -73,6 +76,22 @@ export function resolveAuth(options: {
     ""
   ).trim();
   const exposed = !isLoopbackHost(host) || options.tunnelEnabled;
+  const allowOpen =
+    options.allowOpen ??
+    /^(1|true|yes)$/i.test(process.env["WADLE_ALLOW_OPEN"] ?? "");
+
+  // Deliberate opt-out. The gate exists because Wadle executes model-generated
+  // code, so switching it off on a reachable instance means anyone who finds
+  // the URL can run code on this machine. That is the operator's decision to
+  // make, but it is never the default and it is announced at startup.
+  if (exposed && allowOpen && !configured) {
+    return {
+      required: false,
+      token: "",
+      reason: "WADLE_ALLOW_OPEN is set — the access gate is deliberately off",
+      overridden: true,
+    };
+  }
 
   if (configured) {
     return {

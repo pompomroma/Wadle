@@ -2,7 +2,7 @@
   "name": "wadle",
   "version": "0.1.0",
   "private": true,
-  "description": "Web-based AI for vibe programming — builds, modifies and converts real software until it actually works.",
+  "description": "Web-based AI for vibe programming \u2014 builds, modifies and converts real software until it actually works.",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -10,14 +10,16 @@
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" dev",
     "build": "pnpm --filter \"./apps/*\" build",
-    "//start": "The UI must be built before the server can serve it — dist/ is gitignored, so a fresh clone has none.",
-    "start": "pnpm --filter @wadle/web build && pnpm --filter @wadle/server start",
+    "//start": "The UI must be built before the server can serve it \u2014 dist/ is gitignored, so a fresh clone has none.",
+    "start": "node scripts/preflight.mjs && pnpm --filter @wadle/web build && pnpm --filter @wadle/server start",
     "start:server-only": "pnpm --filter @wadle/server start",
     "typecheck": "pnpm --recursive typecheck",
     "test": "pnpm --filter @wadle/server test",
     "lint": "pnpm --recursive lint",
     "doctor": "pnpm --filter @wadle/server doctor",
-    "secrets:scan": "node scripts/scan-secrets.mjs"
+    "secrets:scan": "node scripts/scan-secrets.mjs",
+    "preflight": "node scripts/preflight.mjs",
+    "setup": "pnpm install && node scripts/preflight.mjs"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

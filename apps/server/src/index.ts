@@ -169,6 +169,14 @@ async function main(): Promise<void> {
       `            stored in ${env.dataDir}/.auth-token`,
       "",
     );
+  } else if (auth.overridden) {
+    lines.push(
+      `  Access    \x1b[1;31mOPEN — NO TOKEN REQUIRED\x1b[0m`,
+      `            ${auth.reason}.`,
+      `            This instance is reachable and ungated: anyone who finds the URL`,
+      `            can run code on this machine. Unset WADLE_ALLOW_OPEN to restore it.`,
+      "",
+    );
   } else {
     lines.push(
       `  Access    open — ${auth.reason}`,
