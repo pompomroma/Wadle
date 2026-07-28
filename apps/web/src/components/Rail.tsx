@@ -1,4 +1,4 @@
-import { api, formatBytes } from "../api.js";
+import { api, formatBytes, withToken } from "../api.js";
 import type {
   Capability,
   Criterion,
@@ -77,7 +77,7 @@ export function Rail({
     if (!detail) return;
     try {
       const result = await api.packageProduct(detail.workspace.id);
-      window.location.href = result.downloadUrl;
+      window.location.href = withToken(result.downloadUrl);
       onRefresh();
     } catch (error) {
       onError((error as Error).message);
@@ -163,7 +163,7 @@ export function Rail({
           </div>
           {detail.preview?.status === "running" && (
             <div style={{ marginTop: "0.55rem" }}>
-              <a href={detail.preview.url} target="_blank" rel="noreferrer">
+              <a href={withToken(detail.preview.url)} target="_blank" rel="noreferrer">
                 Open live product ↗
               </a>
               <div className="note">
@@ -186,7 +186,7 @@ export function Rail({
               <span style={{ color: "var(--dim)", fontSize: "0.7rem" }}>
                 {formatBytes(artifact.size)}
               </span>
-              <a href={`/api/artifacts/${artifact.id}/download`}>↓</a>
+              <a href={withToken(`/api/artifacts/${artifact.id}/download`)}>↓</a>
             </div>
           ))}
         </div>

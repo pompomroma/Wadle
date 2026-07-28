@@ -7,10 +7,12 @@ import { resolve } from "node:path";
 import { env, hasModelCredentials } from "./config/env.js";
 import { MODEL_SPEC } from "./config/model.js";
 import { closeDb, getDb } from "./db/index.js";
+import { registerAuth, resolveAuth } from "./auth.js";
 import { registerApi } from "./routes/api.js";
 import { probeCapabilities } from "./sandbox/capabilities.js";
 import * as preview from "./runtime/preview.js";
 import * as queue from "./runtime/queue.js";
+import { startTunnel, stopTunnel, tunnelModeFromEnv } from "./runtime/tunnel.js";
 
 const WEB_DIST = resolve(env.root, "apps/web/dist");
 
@@ -26,6 +28,13 @@ async function main(): Promise<void> {
   await app.register(multipart, {
     limits: { fileSize: 512 * 1024 * 1024, files: 20 },
   });
+
+  // Decide the access gate before anything is served. A tunnel or a
+  // non-loopback bind forces a token, so there is no window in which this
+  // instance is both reachable and open.
+  const tunnelMode = tunnelModeFromEnv();
+  const auth = resolveAuth({ tunnelEnabled: tunnelMode !== "none" });
+  await registerAuth(app, auth);
 
   await registerApi(app);
 
@@ -108,33 +117,63 @@ async function main(): Promise<void> {
 
   await app.listen({ host: env.host, port: env.port });
 
+  const tunnel = await startTunnel(tunnelMode, env.port);
+
   const capabilities = await probeCapabilities();
   const availableLanguages = capabilities.languages
     .filter((language) => language.available)
     .map((language) => language.label);
 
-  process.stdout.write(
-    [
+  const localBase = `http://${env.host === "0.0.0.0" ? "localhost" : env.host}:${env.port}`;
+  const suffix = auth.required ? `/?t=${auth.token}` : "/";
+
+  const lines = ["", "  Wadle is running.", ""];
+
+  lines.push(`  Open      ${localBase}${suffix}`);
+  if (tunnel.url) {
+    lines.push(`  Public    ${tunnel.url}${suffix}`);
+  }
+  lines.push("");
+
+  if (auth.required) {
+    lines.push(
+      `  Access    token required — ${auth.reason}`,
+      `  Token     ${auth.token}`,
+      `            stored in ${env.dataDir}/.auth-token`,
       "",
-      `  Wadle is running at http://${env.host}:${env.port}`,
+    );
+  } else {
+    lines.push(
+      `  Access    open — ${auth.reason}`,
+      `            binding to 0.0.0.0 or enabling a tunnel turns the token gate on automatically`,
       "",
-      `  Model     ${MODEL_SPEC.displayName} (${env.llm.model})`,
-      `  Endpoint  ${env.llm.baseUrl}`,
-      `  Key       ${
-        hasModelCredentials()
-          ? "configured"
-          : "MISSING — set NVIDIA_API_KEY in .env, or point LLM_BASE_URL at a local model"
-      }`,
-      `  Verifies  ${availableLanguages.join(", ") || "nothing — no language toolchains found"}`,
-      `  Sandbox   network isolation ${capabilities.networkIsolation ? "available" : "unavailable (run in Docker for a real boundary)"}`,
-      "",
-      "  No credit system, no metering, no billing.",
-      "",
-    ].join("\n"),
+    );
+  }
+
+  if (tunnel.error) {
+    lines.push(`  Tunnel    ${tunnel.error}`, "");
+  }
+
+  lines.push(
+    `  Model     ${MODEL_SPEC.displayName} (${env.llm.model})`,
+    `  Endpoint  ${env.llm.baseUrl}`,
+    `  Key       ${
+      hasModelCredentials()
+        ? "configured"
+        : "MISSING — set NVIDIA_API_KEY in .env, or point LLM_BASE_URL at a local model"
+    }`,
+    `  Verifies  ${availableLanguages.join(", ") || "nothing — no language toolchains found"}`,
+    `  Sandbox   network isolation ${capabilities.networkIsolation ? "available" : "unavailable (run in Docker for a real boundary)"}`,
+    "",
+    "  No credit system, no metering, no billing.",
+    "",
   );
+
+  process.stdout.write(lines.join("\n"));
 
   const shutdown = async (signal: string) => {
     app.log.warn(`${signal} received; shutting down.`);
+    await stopTunnel();
     await preview.stopAllPreviews();
     await app.close();
     closeDb();

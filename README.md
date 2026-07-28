@@ -84,6 +84,55 @@ real, checkable property of the deployed model.
 
 ---
 
+## Access and public URLs
+
+Wadle runs code written by a language model, so a reachable instance is always
+gated. You cannot accidentally publish an open one:
+
+| Situation | Gate |
+|---|---|
+| Bound to loopback, no token set | **Open** — local development |
+| Bound to anything else (`HOST=0.0.0.0`, a LAN address, a hostname) | **Token required**, generated automatically |
+| A tunnel is enabled | **Token required**, generated automatically |
+| `WADLE_AUTH_TOKEN` is set | **Token required**, everywhere including locally |
+
+When a token is in force it is printed at startup, stored in
+`data/.auth-token`, and baked into the link you're given:
+
+```
+Open      http://localhost:5174/?t=Xq3nT7...
+Access    token required — bound to 0.0.0.0, which is reachable beyond this machine
+```
+
+Open that link once and the browser moves the token into `sessionStorage` and
+strips it from the address bar, so it stops travelling in URLs and stays out of
+history. API clients can send it as `Authorization: Bearer <token>` instead.
+Only `/api/health` and the UI shell are ungated.
+
+### Getting a public link
+
+```bash
+WADLE_TUNNEL=cloudflare pnpm start
+```
+
+This publishes a temporary `https://…trycloudflare.com` URL via a Cloudflare
+quick tunnel — no Cloudflare account needed, but `cloudflared` must be on PATH.
+Enabling it forces the token gate on.
+
+Quick tunnels are ephemeral: **the hostname changes every restart.** That's
+right for sharing a session and wrong for anything permanent. For a stable
+address, deploy the container somewhere you control and put your own hostname
+in front of it:
+
+```bash
+docker compose up -d --build     # then point your domain at :5174
+```
+
+Set `WADLE_AUTH_TOKEN` to a value you choose when you do that, so the link
+survives restarts.
+
+---
+
 ## Workspaces
 
 Each workspace is a session slot holding one evolving product.

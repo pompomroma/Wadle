@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, streamWorkspace } from "./api.js";
+import { UnauthorizedError, api, streamWorkspace } from "./api.js";
 import type { LogEvent, ModelInfo, Workspace, WorkspaceDetail } from "./api.js";
 import { Composer } from "./components/Composer.js";
 import { Rail } from "./components/Rail.js";
@@ -50,7 +50,11 @@ export function App() {
       setActiveId((current) => current ?? list[0]?.id ?? null);
       return list;
     } catch (cause) {
-      setError((cause as Error).message);
+      setError(
+        cause instanceof UnauthorizedError
+          ? "This Wadle instance needs an access token. Open the link printed at startup, which includes ?t=<token>."
+          : (cause as Error).message,
+      );
       return [];
     }
   }, []);

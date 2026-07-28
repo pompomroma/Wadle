@@ -131,13 +131,58 @@ export interface InspectionReport {
   summary: string;
 }
 
+/**
+ * Access token handling.
+ *
+ * A protected instance is opened with `?t=<token>`. The token is moved into
+ * sessionStorage and stripped from the address bar on first load, so it stops
+ * being copied around in URLs and does not end up in browser history or in a
+ * screenshot of the tab.
+ */
+const TOKEN_KEY = "wadle.token";
+
+function captureTokenFromUrl(): void {
+  const url = new URL(window.location.href);
+  const token = url.searchParams.get("t");
+  if (!token) return;
+  sessionStorage.setItem(TOKEN_KEY, token);
+  url.searchParams.delete("t");
+  window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+}
+
+captureTokenFromUrl();
+
+export function authToken(): string | null {
+  return sessionStorage.getItem(TOKEN_KEY);
+}
+
+export function clearToken(): void {
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+/** Append the token to a URL — for EventSource and links, which cannot use headers. */
+export function withToken(path: string): string {
+  const token = authToken();
+  if (!token) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(token)}`;
+}
+
+export class UnauthorizedError extends Error {}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const token = authToken();
+  const headers = new Headers(init?.headers);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+
+  const response = await fetch(path, { ...init, headers });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as
       | { error?: string }
       | null;
-    throw new Error(body?.error ?? `${response.status} ${response.statusText}`);
+    const message =
+      body?.error ?? `${response.status} ${response.statusText}`;
+    if (response.status === 401) throw new UnauthorizedError(message);
+    throw new Error(message);
   }
   return (await response.json()) as T;
 }
@@ -222,7 +267,8 @@ export function streamWorkspace(
     onState: (state: { running: boolean; requests: RequestRow[] }) => void;
   },
 ): () => void {
-  const source = new EventSource(`/api/workspaces/${id}/stream`);
+  // EventSource cannot set headers, so the token rides in the query string.
+  const source = new EventSource(withToken(`/api/workspaces/${id}/stream`));
   source.addEventListener("log", (event) => {
     handlers.onLog(JSON.parse((event as MessageEvent).data) as LogEvent);
   });
