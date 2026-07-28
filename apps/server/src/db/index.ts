@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { env } from "../config/env.js";
 
@@ -105,11 +105,43 @@ export interface PreviewRow {
 
 let db: Database.Database | null = null;
 
+/**
+ * Isolate generated products from Wadle's own module system.
+ *
+ * Node resolves `"type"` by walking up from a script to the nearest
+ * package.json. Because the data directory lives inside this repository, a
+ * generated `server.js` would otherwise inherit Wadle's `"type": "module"` and
+ * fail on `require()` — a confusing failure in code that is perfectly correct
+ * on its own. Declaring CommonJS here restores Node's real default for a
+ * directory with no package.json. A generated project that ships its own
+ * package.json still wins, because the nearest one takes precedence.
+ */
+function ensureModuleBoundary(): void {
+  const boundary = resolve(env.dataDir, "package.json");
+  if (existsSync(boundary)) return;
+  writeFileSync(
+    boundary,
+    `${JSON.stringify(
+      {
+        name: "wadle-workspace-root",
+        private: true,
+        type: "commonjs",
+        _comment:
+          "Written by Wadle. Stops generated products inheriting the repo's ESM setting; a product's own package.json overrides this.",
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+}
+
 export function getDb(): Database.Database {
   if (db) return db;
   mkdirSync(dirname(env.databaseFile), { recursive: true });
   mkdirSync(env.workspacesDir, { recursive: true });
   mkdirSync(env.artifactsDir, { recursive: true });
+  ensureModuleBoundary();
 
   db = new Database(env.databaseFile);
   db.pragma("journal_mode = WAL");
