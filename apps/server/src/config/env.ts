@@ -6,6 +6,25 @@ import { resolve } from "node:path";
  * variable already present in the real environment always wins, so container
  * and CI configuration override the file.
  */
+/**
+ * Turn the right-hand side of a `KEY=value` line into the value.
+ *
+ * Exported because getting this wrong is invisible and expensive: a credential
+ * carrying a stray quote or a trailing comment is sent verbatim, and the
+ * provider answers 403 — indistinguishable from a revoked key.
+ */
+export function parseEnvValue(raw: string): string {
+  const value = raw.trim();
+  const quoted =
+    value.length >= 2 &&
+    ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'")));
+  if (quoted) return value.slice(1, -1);
+  // An unquoted trailing comment is not part of the value. A '#' with no
+  // whitespace before it is kept, since it can occur inside a secret.
+  return value.replace(/\s+#.*$/, "").trim();
+}
+
 function loadDotEnv(file: string): void {
   if (!existsSync(file)) return;
   for (const rawLine of readFileSync(file, "utf8").split("\n")) {
@@ -15,14 +34,7 @@ function loadDotEnv(file: string): void {
     if (eq === -1) continue;
     const key = line.slice(0, eq).trim();
     if (key in process.env) continue;
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    process.env[key] = value;
+    process.env[key] = parseEnvValue(line.slice(eq + 1));
   }
 }
 

@@ -214,7 +214,10 @@ function describeHttpFailure(
   switch (status) {
     case 401:
     case 403:
-      return `Model backend rejected the credential (HTTP ${status}). Check NVIDIA_API_KEY in .env — and if the key was ever pasted into a chat or committed, rotate it at build.nvidia.com. ${trimmed}`;
+      // 403 covers a revoked key, a malformed one, and a valid key with no
+      // entitlement to this model — different fixes, and a request cannot tell
+      // them apart. `pnpm check-key` makes one call that can.
+      return `Model backend rejected the credential (HTTP ${status}). Run 'pnpm check-key' — it distinguishes a revoked key from a malformed one from a model your account cannot reach, and prints the fix for whichever it is. A key that was ever pasted into a chat or committed is treated as compromised by the provider and must be replaced, not just removed. ${trimmed}`;
     case 404:
       return `Model not found at ${baseUrl} (HTTP 404). Check LLM_MODEL. ${trimmed}`;
     case 429:

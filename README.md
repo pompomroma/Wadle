@@ -78,6 +78,30 @@ LLM_BASE_URL=http://localhost:11434/v1    # Ollama, llama.cpp, vLLM — anything
 LLM_MODEL=qwen2.5-coder:32b               # OpenAI-compatible endpoints all work
 ```
 
+### When the model backend rejects your key
+
+```bash
+pnpm check-key
+```
+
+`HTTP 403 — Authorization failed` has several causes that look identical from
+inside a build, so this makes one cheap call and says which one you have:
+
+| What it finds | What it means |
+|---|---|
+| Key absent or still the placeholder | Nothing was configured |
+| Key contains whitespace or quotes | A trailing comment or quoting in `.env` became part of the credential |
+| Provider answers 401/403 | The key is revoked, incomplete, or from another account |
+| Provider accepts it, model not listed | The key is fine; `LLM_MODEL` is not available to you — it prints what is |
+| Endpoint unreachable | A network or proxy problem, not a credential one |
+
+**A revoked key cannot be repaired.** Providers scan public sources and disable
+keys that appear in them, so a key pasted into a chat, an issue or a commit is
+switched off at their end. Deleting the line does not un-leak it — issue a new
+one at [build.nvidia.com](https://build.nvidia.com) and replace the value.
+
+If you would rather not depend on a provider key at all, see below.
+
 ### Credits and payment
 
 Wadle has **no credit system, no metering, no quotas and no billing**. There is
@@ -86,7 +110,23 @@ no paywall to remove because none was built.
 What Wadle cannot do is make someone else's API free. If you use NVIDIA's hosted
 endpoint, NVIDIA's rate limits apply — they are theirs, not ours. Pointing
 `LLM_BASE_URL` at a model on your own machine gives you a path with no provider
-limits and no per-token cost at all.
+limits and no per-token cost at all:
+
+```bash
+ollama serve
+ollama pull qwen2.5-coder:32b
+```
+
+```bash
+# .env
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=qwen2.5-coder:32b
+LLM_API_KEY=ollama          # Ollama ignores it; the field just must exist
+```
+
+`pnpm check-key` works against a local endpoint too, and will tell you if the
+server isn't running or the model isn't pulled. No key, no quota, no billing,
+and nothing to revoke.
 
 ### About the TOPS figure
 

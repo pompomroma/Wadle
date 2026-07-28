@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
-    "doctor": "tsx src/cli/doctor.ts"
+    "doctor": "tsx src/cli/doctor.ts",
+    "check-key": "tsx src/cli/check-key.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",
