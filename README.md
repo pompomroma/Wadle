@@ -22,6 +22,14 @@ pnpm install
 pnpm dev                   # UI on :5173, API on :5174
 ```
 
+`pnpm dev` builds the UI on the fly. To run it as a single server instead,
+build first — `dist/` is not in the repository, so a fresh clone has no UI
+until you do:
+
+```bash
+pnpm build && pnpm start   # everything on :5174
+```
+
 Or with the full toolchain set and real isolation:
 
 ```bash
@@ -112,10 +120,12 @@ Only `/api/health` and the UI shell are ungated.
 ### Getting a public link
 
 ```bash
+pnpm build                              # a fresh clone has no built UI yet
 WADLE_TUNNEL=cloudflare pnpm start
 ```
 
-This publishes a temporary `https://…trycloudflare.com` URL via a Cloudflare
+`pnpm start` runs the build for you, so the first line is only needed if you
+want to see build output separately. This publishes a temporary `https://…trycloudflare.com` URL via a Cloudflare
 quick tunnel — no Cloudflare account needed, but `cloudflared` must be on PATH.
 Enabling it forces the token gate on.
 

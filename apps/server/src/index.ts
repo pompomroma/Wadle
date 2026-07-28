@@ -100,13 +100,34 @@ async function main(): Promise<void> {
 
   // The built web UI, when it exists. In development the Vite dev server
   // serves it instead and proxies /api here.
-  if (existsSync(WEB_DIST)) {
+  const webBuilt = existsSync(WEB_DIST);
+  if (webBuilt) {
     await app.register(fastifyStatic, { root: WEB_DIST, prefix: "/" });
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith("/api/") || request.url.startsWith("/p/")) {
         return reply.status(404).send({ error: "Not found" });
       }
       return reply.sendFile("index.html");
+    });
+  } else {
+    // Without this the UI silently 404s and the cause is not obvious — the
+    // API answers fine, so it looks like a routing bug rather than a missing
+    // build step.
+    app.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith("/api/") || request.url.startsWith("/p/")) {
+        return reply.status(404).send({ error: "Not found" });
+      }
+      return reply.status(503).type("text/html").send(
+        `<!doctype html><meta charset="utf-8"><title>Wadle — UI not built</title>
+         <body style="font:15px/1.6 system-ui;max-width:40rem;margin:4rem auto;padding:0 1rem">
+         <h1>The web UI has not been built</h1>
+         <p>The API is running, but <code>apps/web/dist</code> does not exist, so there is
+            nothing to serve here.</p>
+         <p>Build it and restart:</p>
+         <pre style="background:#f4f4f5;padding:.8rem;border-radius:6px">pnpm build && pnpm start</pre>
+         <p>Or run the dev server, which builds on the fly:</p>
+         <pre style="background:#f4f4f5;padding:.8rem;border-radius:6px">pnpm dev</pre>`,
+      );
     });
   }
 
@@ -132,6 +153,12 @@ async function main(): Promise<void> {
   lines.push(`  Open      ${localBase}${suffix}`);
   if (tunnel.url) {
     lines.push(`  Public    ${tunnel.url}${suffix}`);
+  }
+  if (!webBuilt) {
+    lines.push(
+      `  UI        NOT BUILT — the API works but ${localBase}/ has nothing to serve.`,
+      `            Run \`pnpm build\` first, or use \`pnpm dev\`.`,
+    );
   }
   lines.push("");
 
