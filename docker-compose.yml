@@ -1,0 +1,33 @@
+services:
+  wadle:
+    build: .
+    ports:
+      - "5174:5174"
+      # Live previews of generated web products.
+      - "5200-5299:5200-5299"
+    environment:
+      # Read from your shell or a .env file beside this compose file.
+      # Never hard-code the key here — this file is committed.
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://integrate.api.nvidia.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-nvidia/nemotron-3-ultra-550b-a55b}
+      AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-200}
+      AGENT_WALL_CLOCK_MS: ${AGENT_WALL_CLOCK_MS:-7200000}
+    volumes:
+      # Workspaces, revisions and artifacts survive a rebuild.
+      - wadle-data:/app/data
+    # Generated code runs in here. These make the container the real boundary
+    # rather than a convenience wrapper.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # unshare -n needs this to drop network access for generated processes.
+      - SYS_ADMIN
+    pids_limit: 1024
+    mem_limit: 6g
+    restart: unless-stopped
+
+volumes:
+  wadle-data:
