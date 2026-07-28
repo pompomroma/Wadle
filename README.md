@@ -34,8 +34,15 @@ build first — `dist/` is not in the repository, so a fresh clone has no UI
 until you do:
 
 ```bash
+pnpm install               # skip if you already ran pnpm setup
 pnpm build && pnpm start   # everything on :5174
 ```
+
+You don't have to remember that install step. Every entry point checks for
+`node_modules` first and installs them for you if they're missing, so
+`pnpm build` on a fresh clone works rather than failing with `tsc: not found`.
+Set `CI=1` or `WADLE_NO_AUTO_INSTALL=1` and it prints the command instead of
+running it.
 
 Or with the wider toolchain set and real isolation:
 
