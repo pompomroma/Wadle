@@ -232,6 +232,88 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+export interface ServiceHandle {
+  pid: number | undefined;
+  /** Everything the process has written so far, both streams interleaved. */
+  output(): string;
+  exited(): boolean;
+  exitCode(): number | null;
+  stop(): Promise<void>;
+}
+
+/**
+ * Start a long-running process (a dev server, a game host) and return a handle.
+ *
+ * Unlike `run`, this does not wait for exit — the caller probes the service,
+ * then stops it. The process gets its own group so `stop` reliably takes down
+ * child processes too, which matters because most dev servers spawn workers.
+ */
+export function startService(options: {
+  cwd: string;
+  command: string;
+  env?: Record<string, string>;
+  maxMemoryMb?: number;
+}): ServiceHandle {
+  const cwd = resolve(options.cwd);
+  assertInsideWorkspaceRoot(cwd);
+
+  const memoryMb = options.maxMemoryMb ?? env.sandbox.maxMemoryMb;
+  const script = [
+    `ulimit -v ${memoryMb * 1024} 2>/dev/null || true`,
+    `ulimit -u ${env.sandbox.maxProcesses} 2>/dev/null || true`,
+    options.command,
+  ].join("\n");
+
+  const child = spawn("bash", ["-c", script], {
+    cwd,
+    env: baseEnvironment(options.env),
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let buffer = "";
+  let done = false;
+  let code: number | null = null;
+
+  const append = (chunk: Buffer) => {
+    if (buffer.length < MAX_CAPTURE) buffer += chunk.toString("utf8");
+  };
+  child.stdout.on("data", append);
+  child.stderr.on("data", append);
+  child.on("exit", (exitCode) => {
+    done = true;
+    code = exitCode;
+  });
+  child.on("error", (error) => {
+    done = true;
+    buffer += `\n${error.message}`;
+  });
+
+  return {
+    pid: child.pid,
+    output: () => truncate(buffer),
+    exited: () => done,
+    exitCode: () => code,
+    stop: async () => {
+      if (done || !child.pid) return;
+      try {
+        process.kill(-child.pid, "SIGTERM");
+      } catch {
+        /* already gone */
+      }
+      // Give it a moment to shut down cleanly, then insist.
+      await new Promise((r) => setTimeout(r, 400));
+      if (!done && child.pid) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          /* already gone */
+        }
+      }
+    },
+  };
+}
+
 /** Is a binary on PATH? Used to report degraded capability tiers honestly. */
 export async function hasBinary(name: string): Promise<boolean> {
   return new Promise((done) => {

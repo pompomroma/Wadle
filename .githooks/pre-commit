@@ -1,0 +1,10 @@
+#!/bin/sh
+# Wadle pre-commit hook.
+#
+# Enable with:  git config core.hooksPath .githooks
+#
+# Blocks credential-shaped strings from being committed. This is version
+# controlled rather than living in .git/hooks so every clone gets it.
+set -e
+
+node scripts/scan-secrets.mjs --staged

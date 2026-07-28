@@ -5,6 +5,7 @@ import type {
   ChatMessage,
   CompletionResult,
   LLMBackend,
+  TokenUsage,
 } from "./types.js";
 
 export * from "./types.js";
@@ -42,6 +43,8 @@ export interface AskOptions {
   json?: boolean;
   signal?: AbortSignal;
   onToken?: (chunk: string) => void;
+  /** Called for every underlying call, including JSON repair retries. */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 /** Single-shot completion with a system prompt. */
@@ -58,7 +61,7 @@ export async function ask(
     messages.push(...prompt);
   }
 
-  return getBackend().complete({
+  const result = await getBackend().complete({
     messages,
     temperature: sampling.temperature,
     topP: sampling.top_p,
@@ -67,6 +70,8 @@ export async function ask(
     signal: options.signal,
     onToken: options.onToken,
   });
+  options.onUsage?.(result.usage);
+  return result;
 }
 
 /**

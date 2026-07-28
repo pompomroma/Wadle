@@ -257,6 +257,19 @@ export function createRevision(input: {
   return row;
 }
 
+/**
+ * Record where a revision's snapshot was written. Split from `createRevision`
+ * because the snapshot path is derived from the generated revision id.
+ */
+export function setRevisionSnapshot(
+  revisionId: string,
+  snapshotDir: string,
+): void {
+  getDb()
+    .prepare(`UPDATE revision SET snapshot_dir = ? WHERE id = ?`)
+    .run(snapshotDir, revisionId);
+}
+
 export function listRevisions(workspaceId: string): RevisionRow[] {
   return getDb()
     .prepare(`SELECT * FROM revision WHERE workspace_id = ? ORDER BY seq DESC`)
