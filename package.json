@@ -18,6 +18,7 @@
     "lint": "pnpm --recursive lint",
     "doctor": "pnpm --filter @wadle/server doctor",
     "secrets:scan": "node scripts/scan-secrets.mjs",
+    "test:docker-layers": "sh scripts/test-docker-layers.sh",
     "preflight": "node scripts/preflight.mjs",
     "setup": "pnpm install && node scripts/preflight.mjs"
   },

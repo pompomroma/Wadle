@@ -42,7 +42,7 @@ const MAX_CAPTURE = 256 * 1024; // 256 KiB per stream, then truncate.
 /** Cached probe: can we drop network access via an unprivileged user namespace? */
 let networkIsolation: "unshare" | "none" | null = null;
 
-async function detectNetworkIsolation(): Promise<"unshare" | "none"> {
+export async function detectNetworkIsolation(): Promise<"unshare" | "none"> {
   if (networkIsolation) return networkIsolation;
   const probe = await new Promise<boolean>((done) => {
     const child = spawn("unshare", ["-rn", "true"], { stdio: "ignore" });

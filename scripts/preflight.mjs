@@ -75,31 +75,45 @@ try {
 }
 
 // --- configuration ---------------------------------------------------------
+// The environment is checked first and the file second, because the file is
+// only ever one way of populating the environment. Docker, CI and an exported
+// shell variable all supply configuration without a .env existing at all, and
+// reporting those as unconfigured would be wrong.
 const envFile = resolve(ROOT, ".env");
-if (!existsSync(envFile)) {
-  bad(".env is missing", "cp .env.example .env   # then add your model key");
-} else {
-  const contents = readFileSync(envFile, "utf8");
-  const key = contents.match(/^NVIDIA_API_KEY=(.*)$/m)?.[1]?.trim() ?? "";
-  const baseUrl = contents.match(/^LLM_BASE_URL=(.*)$/m)?.[1]?.trim() ?? "";
-  const local = /localhost|127\.0\.0\.1|host\.docker\.internal/.test(baseUrl);
+const fromFile = existsSync(envFile) ? readFileSync(envFile, "utf8") : "";
+const readSetting = (name) =>
+  (process.env[name] ?? fromFile.match(new RegExp(`^${name}=(.*)$`, "m"))?.[1] ?? "").trim();
 
-  if (local) {
-    ok(`.env points at a local model (${baseUrl})`);
-  } else if (!key || key === "nvapi-your-key-here") {
-    bad(
-      ".env has no model key — builds will fail at the first model call",
-      "Put your key in NVIDIA_API_KEY in .env (get one at https://build.nvidia.com),\n" +
-        "     or set LLM_BASE_URL to a local model such as http://localhost:11434/v1",
-    );
-  } else if (!key.startsWith("nvapi-")) {
+const key = readSetting("NVIDIA_API_KEY") || readSetting("LLM_API_KEY");
+const baseUrl = readSetting("LLM_BASE_URL");
+const local = /localhost|127\.0\.0\.1|host\.docker\.internal/.test(baseUrl);
+const source = process.env["NVIDIA_API_KEY"] || process.env["LLM_API_KEY"]
+  ? "the environment"
+  : ".env";
+
+if (local) {
+  ok(`configured for a local model (${baseUrl})`);
+} else if (key && key !== "nvapi-your-key-here") {
+  if (key.startsWith("nvapi-")) {
+    ok(`model key found in ${source}`);
+  } else {
     warn(
-      "NVIDIA_API_KEY does not look like an NVIDIA key (expected an nvapi- prefix)",
+      `the model key in ${source} does not look like an NVIDIA key (expected an nvapi- prefix)`,
       "Double-check the value, or set LLM_BASE_URL if you meant a different provider",
     );
-  } else {
-    ok(".env has a model key");
   }
+} else if (!existsSync(envFile)) {
+  bad(
+    "no model key configured, and no .env to read one from",
+    "cp .env.example .env   # then add your model key\n" +
+      "     or export NVIDIA_API_KEY=…, or set LLM_BASE_URL to a local model",
+  );
+} else {
+  bad(
+    "no model key configured — builds will fail at the first model call",
+    "Put your key in NVIDIA_API_KEY in .env (get one at https://build.nvidia.com),\n" +
+      "     or set LLM_BASE_URL to a local model such as http://localhost:11434/v1",
+  );
 }
 
 // --- port ------------------------------------------------------------------

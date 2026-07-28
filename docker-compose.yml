@@ -9,10 +9,16 @@ services:
       # Read from your shell or a .env file beside this compose file.
       # Never hard-code the key here — this file is committed.
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://integrate.api.nvidia.com/v1}
       LLM_MODEL: ${LLM_MODEL:-nvidia/nemotron-3-ultra-550b-a55b}
       AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-200}
       AGENT_WALL_CLOCK_MS: ${AGENT_WALL_CLOCK_MS:-7200000}
+      AGENT_TOKEN_CEILING: ${AGENT_TOKEN_CEILING:-20000000}
+      # The container binds 0.0.0.0, so the access gate is on and a token is
+      # generated at startup. Set this to a value you choose and the link
+      # survives restarts; read it from the logs otherwise.
+      WADLE_AUTH_TOKEN: ${WADLE_AUTH_TOKEN:-}
     volumes:
       # Workspaces, revisions and artifacts survive a rebuild.
       - wadle-data:/app/data
@@ -22,9 +28,15 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    cap_add:
-      # unshare -n needs this to drop network access for generated processes.
-      - SYS_ADMIN
+    # No cap_add. The sandbox isolates generated processes with `unshare -rn`,
+    # which uses an unprivileged user namespace and so needs no capability from
+    # the parent; it probes first and reports the result through `pnpm doctor`.
+    # Granting SYS_ADMIN to strengthen that inner layer would weaken the
+    # container itself, which is the outer one and the real boundary.
+    #
+    # If `pnpm doctor` in the container reports network isolation as
+    # unavailable and you want it back, add it deliberately:
+    #   cap_add: [SYS_ADMIN]
     pids_limit: 1024
     mem_limit: 6g
     restart: unless-stopped

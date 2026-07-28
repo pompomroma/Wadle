@@ -37,11 +37,15 @@ until you do:
 pnpm build && pnpm start   # everything on :5174
 ```
 
-Or with the full toolchain set and real isolation:
+Or with the wider toolchain set and real isolation:
 
 ```bash
 NVIDIA_API_KEY=... docker compose up --build
 ```
+
+The image binds `0.0.0.0`, so the access gate is on and a token is printed at
+startup — set `WADLE_AUTH_TOKEN` to keep the same link across restarts. See
+[Containers](#containers) for what is and is not in the image.
 
 Check what your machine can actually do:
 
@@ -296,6 +300,53 @@ containment is layered rather than assumed:
    kernel allows it. Only dependency installation is granted network access.
 
 Running bare metal you get layers 2–5. `pnpm doctor` tells you which are active.
+
+---
+
+## Containers
+
+```bash
+NVIDIA_API_KEY=... docker compose up --build
+```
+
+Configuration reaches the container through the environment, not a `.env` —
+`.env` is deliberately excluded from the image so a key is never baked into a
+layer. Compose still reads a `.env` beside `docker-compose.yml` for variable
+substitution, so keeping your key there works too.
+
+### What the image installs
+
+Only what Wadle cannot run without will fail the build. Everything else prints
+a warning and the build continues, because a tier that degrades honestly at
+runtime should degrade at build time as well:
+
+| Layer | On failure |
+|---|---|
+| Node, pnpm, Python, build-essential, util-linux | **Build fails** — Wadle cannot run without these |
+| Go, Rust, JDK, PHP, Ruby | Warns; those languages drop out of the verified set |
+| mingw-w64 | Warns; `.exe` output degrades to inspection and patching |
+| ffmpeg, ImageMagick, pandoc, LibreOffice, Pillow | Warns; those conversions become unavailable |
+| devkitARM | Warns; see below |
+
+`pnpm doctor` inside the container reports what that particular image ended up
+with, so a degraded build is visible rather than a surprise later.
+
+### devkitARM is not included by default
+
+devkitARM is what produces a real `.gba` ROM from source. It is not in Debian,
+and devkitPro's prebuilt archive URLs move between releases — a hard-coded URL
+that has since 404'd fails every build of the image, for a tier that is
+optional. So none is baked in. Supply one to get the full GBA tier:
+
+```bash
+docker compose build --build-arg DEVKITARM_URL=https://…/devkitARM-linux-x86_64.tar.xz
+docker compose up
+```
+
+Without it you still get GBA cartridge header read/write with a correct
+complement check, graphics and palette extraction, and IPS/UPS/BPS patch
+generation — which is how ROM hacks are actually made. What you lose is
+compiling a new ROM from source.
 
 ---
 

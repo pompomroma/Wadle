@@ -1,4 +1,4 @@
-import { hasBinary } from "./exec.js";
+import { detectNetworkIsolation, hasBinary } from "./exec.js";
 
 export interface Capability {
   id: string;
@@ -139,17 +139,21 @@ export async function probeCapabilities(
   refresh = false,
 ): Promise<CapabilityReport> {
   if (cached && !refresh) return cached;
-  const [languages, binaryTargets, conversion, unshare] = await Promise.all([
+  // The isolation probe actually runs `unshare -rn`, rather than checking that
+  // the binary exists. A container can have the binary and still refuse the
+  // user namespace, and reporting that as available would be exactly the kind
+  // of claim this report exists to avoid.
+  const [languages, binaryTargets, conversion, isolation] = await Promise.all([
     resolveGroup(LANGUAGES),
     resolveGroup(BINARY_TARGETS),
     resolveGroup(CONVERSION),
-    hasBinary("unshare"),
+    detectNetworkIsolation(),
   ]);
   cached = {
     languages,
     binaryTargets,
     conversion,
-    networkIsolation: unshare,
+    networkIsolation: isolation === "unshare",
     generatedAt: Date.now(),
   };
   return cached;
