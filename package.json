@@ -19,6 +19,7 @@
     "lint": "pnpm --recursive lint",
     "doctor": "pnpm --filter @wadle/server doctor",
     "check-key": "pnpm --filter @wadle/server check-key",
+    "set-key": "node scripts/set-key.mjs",
     "secrets:scan": "node scripts/scan-secrets.mjs",
     "test:docker-layers": "sh scripts/test-docker-layers.sh",
     "preflight": "node scripts/preflight.mjs",

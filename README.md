@@ -78,6 +78,35 @@ LLM_BASE_URL=http://localhost:11434/v1    # Ollama, llama.cpp, vLLM — anything
 LLM_MODEL=qwen2.5-coder:32b               # OpenAI-compatible endpoints all work
 ```
 
+### Setting your key
+
+```bash
+pnpm set-key nvapi-xxxxxxxx     # writes .env
+pnpm set-key --local            # use a local model instead, no key at all
+pnpm check-key                  # confirm it works
+```
+
+**Never put a key in `.env.example`.** That file is a committed template and is
+*not read as configuration* — the app loads `.env` only. Editing it publishes
+the credential and changes nothing about what the app uses. The secret scanner
+and the pre-commit hook both refuse it.
+
+Nothing needs to be committed to configure Wadle. `.env` is gitignored by
+design, so a key never has to travel through git at all — which also means a
+slow or blocked push can never be what stands between you and a working
+instance.
+
+On a remote machine — a Codespace, a VM, a container — set it there directly,
+in that machine's terminal:
+
+```bash
+pnpm set-key nvapi-xxxxxxxx
+```
+
+For a key that survives Codespace rebuilds, add it once under
+**GitHub → Settings → Codespaces → Secrets** as `NVIDIA_API_KEY`; it arrives as
+an environment variable, which takes precedence over `.env`.
+
 ### When the model backend rejects your key
 
 ```bash
